@@ -9,6 +9,7 @@ from pendulum import period, DateTime, Period
 import logging
 from functools import reduce
 from pyspark.sql import DataFrame
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class DatePartitionedRawDataLoader(RawDataLoader):
         self.url_builder
         self.spark = conn["sql_context"]
 
-    def load_data_in_a_cluster(self, start, end, cluster: FeatureCluster):
+    def load_data(self, start, end, clusters: List[FeatureCluster]):
         """ v1. just date partitioned (neither positions nor sensors) raw data
 
         :param start:
