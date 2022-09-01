@@ -5,13 +5,14 @@
 from rawDataLoader import RawDataLoader
 from feature.featureCluster import FeatureCluster
 from helpers.url import URLBuilder, HDFSBuilder
-from pendulum import period, DateTime, Period
-import logging
+from pendulum import period, DateTime, Period, now
+#import logging
 from functools import reduce
 from pyspark.sql import DataFrame
 from typing import List
+from pyspark.sql.types import StructType
 
-logger = logging.getLogger(__name__)
+#logger = logging.getLogger(__name__)
 
 
 class DatePartitionedRawDataLoader(RawDataLoader):
@@ -33,35 +34,45 @@ class DatePartitionedRawDataLoader(RawDataLoader):
 
         :param start:
         :param end:
-        :param cluster:
+        :param clusters
         :return:
         """
-        position_id = cluster.pos_id
-        # self.url_builder.setCluster(position_id)
         _period = period(start, end)
-        data = dict()
 
         # load data
-        dfs = []
+        df = self.spark.createDataFrame([], StructType([])) 
+        print(f"[{now()}]Data load start")
         for date in _period.range("days"):
             path = self.url_builder.setDate(date).url()
             try:
-                df = self.spark.read.format("org.apache.spark.sql.json").load(path)
-                dfs.append(df)
-                logger.debug(f"Data path was loaded: {path}")
+                date_df = self.spark.read.format("org.apache.spark.sql.json").load(path)
+                df = df.unionByName(date_df, allowMissingColumns=True)  # todo : compare with broadcasting small df
+                #logger.debug(f"Data path was loaded: {path}")
+                print(f"[{now()}]Data path was loaded: {path}")
             except Exception as e:
-                logger.debug(f"Data path does not exists: {path}")
-        if len(dfs) > 0:
-            ss_df = reduce(DataFrame.unionAll, dfs)
-        else:
-            return data
+                #logger.debug(f"Data path does not exists: {path}")
+                print(f"Error: {e}")
+        df.cache()
+        print(f"[{now()}]Data load end")
 
-        # Partition for each sensor belonging
-        for sensor in cluster.get_features():
-            df = ss_df.filter(ss_df["ss_id"] == sensor.ss_id).sort("event_time")
-            if df.count() > 0:
-                data[str(sensor.ss_id)] = df
+        # Partition for each sensor, position
+        print(f"[{now()}]Data Filtering for each sensors start")
+        data = dict()
+        for position in clusters:
+            data[str(position.pos_id)] = dict()
+            pos_data = dict()
+            if "ss_id" in df.columns:
+                for sensor in position.get_features():
+                    ss_df = df.filter(df["ss_id"] == sensor.ss_id)
+                    ss_df.cache()
+                    if ss_df.count() > 0:
+                        pos_data[str(sensor.ss_id)] = ss_df
+                        print(f"Sensor [{sensor.ss_id}] was yielded")
+            data[str(position.pos_id)] = pos_data
+        print(f"[{now()}]Data Filtering end")
+        df.unpersist()
         return data
+
 
     def __generate_url_builder(self, conn_conf):
         self.url_builder = (
