@@ -4,6 +4,7 @@
 
 from abc import ABCMeta, abstractmethod
 from feature.featureCluster import FeatureCluster
+from typing import List
 
 
 class RawDataLoader(metaclass=ABCMeta):
@@ -16,5 +17,5 @@ class RawDataLoader(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def load_data_in_a_cluster(self, start, end, cluster: FeatureCluster):
+    def load_data(self, start, end, clusters: List[FeatureCluster]):
         pass
