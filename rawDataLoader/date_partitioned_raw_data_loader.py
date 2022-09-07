@@ -4,6 +4,7 @@
 
 from rawDataLoader import RawDataLoader
 from feature.featureCluster import FeatureCluster
+from feature.feature import Feature
 from helpers.url import URLBuilder, HDFSBuilder
 from pendulum import period, DateTime, Period, now
 #import logging
@@ -11,6 +12,7 @@ from functools import reduce
 from pyspark.sql import DataFrame
 from typing import List
 from pyspark.sql.types import StructType
+import pyspark.sql.functions as F
 
 #logger = logging.getLogger(__name__)
 
@@ -73,6 +75,34 @@ class DatePartitionedRawDataLoader(RawDataLoader):
         df.unpersist()
         return data
 
+    def load_feature_data_by_object(self, start, end, feature: Feature):
+        """
+
+        :param start:
+        :param end:
+        :param feature:
+        :return:
+        """
+        ss_id = feature.ss_id
+        _period = period(start, end)
+
+        # load data
+        df = self.spark.createDataFrame([], StructType([]))
+        print(f"[{now()}]Sensor {ss_id} data load start")
+        for date in _period.range("days"):
+            path = self.url_builder.setDate(date).url()
+            try:
+                date_df = self.spark.read.format("org.apache.spark.sql.json").load(path)
+                df = df.unionByName(date_df, allowMissingColumns=True)  # todo : compare with broadcasting small df
+                # logger.debug(f"Data path was loaded: {path}")
+                print(f"[{now()}]Data path was loaded: {path}")
+            except Exception as e:
+                # logger.debug(f"Data path does not exists: {path}")
+                print(f"Error: {e}")
+        ss_df = df.filter(F.col("ss_id") == ss_id)
+        ss_df.cache()
+        print(f"[{now()}]Sensor {ss_id} data load end, length {ss_df.count()}")
+        return ss_df
 
     def __generate_url_builder(self, conn_conf):
         self.url_builder = (
