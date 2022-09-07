@@ -2,7 +2,7 @@ import os
 from setuptools import setup, find_packages
 
 setup(name="aicns_raw_data_loader",
-      version="0.0.2",
+      version="0.0.3",
       description="Raw data loader library package in AICNS project",
       author="Youngmin An",
       author_email="youngmin.develop@gmail.com",
