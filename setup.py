@@ -1,8 +1,11 @@
 import os
 from setuptools import setup, find_packages
 
+
+__version__ = "0.0.3"
+
 setup(name="aicns_raw_data_loader",
-      version="0.0.3",
+      version=__version__,
       description="Raw data loader library package in AICNS project",
       author="Youngmin An",
       author_email="youngmin.develop@gmail.com",
@@ -11,7 +14,7 @@ setup(name="aicns_raw_data_loader",
       packages=find_packages(),
       install_requires=[
           'pendulum',
-          'pyspark>=3.0.3',
+          'pyspark==3.0.3',
           'aicns-feature-metadata'
       ]
 )
