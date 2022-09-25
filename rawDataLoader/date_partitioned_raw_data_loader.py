@@ -5,14 +5,12 @@
 from rawDataLoader import RawDataLoader
 from feature.featureCluster import FeatureCluster
 from feature.feature import Feature
-from helpers.url import URLBuilder, HDFSBuilder
-from pendulum import period, DateTime, Period, now
-#import logging
-from functools import reduce
-from pyspark.sql import DataFrame
+from helpers.url import HDFSBuilder
+from pendulum import period, DateTime, now
 from typing import List
-from pyspark.sql.types import StructType
+from pyspark.sql.types import StructType, StructField, LongType, FloatType, IntegerType
 import pyspark.sql.functions as F
+#import logging
 
 #logger = logging.getLogger(__name__)
 
@@ -42,13 +40,15 @@ class DatePartitionedRawDataLoader(RawDataLoader):
         _period = period(start, end)
 
         # load data
-        df = self.spark.createDataFrame([], StructType([])) 
+        data_col_name = "input_data"
+        time_col_name = "event_time"
+        df = self.spark.createDataFrame([], schema=self.__load_schema())
         print(f"[{now()}]Data load start")
         for date in _period.range("days"):
             path = self.url_builder.setDate(date).url()
             try:
-                date_df = self.spark.read.format("org.apache.spark.sql.json").load(path)
-                df = df.unionByName(date_df, allowMissingColumns=True)  # todo : compare with broadcasting small df
+                date_df = self.spark.read.format("org.apache.spark.sql.json").load(path).select([time_col_name, data_col_name, "ss_id"])
+                df = df.unionByName(date_df)  # todo : compare with broadcasting small df
                 #logger.debug(f"Data path was loaded: {path}")
                 print(f"[{now()}]Data path was loaded: {path}")
             except Exception as e:
@@ -65,7 +65,7 @@ class DatePartitionedRawDataLoader(RawDataLoader):
             pos_data = dict()
             if "ss_id" in df.columns:
                 for sensor in position.get_features():
-                    ss_df = df.filter(df["ss_id"] == sensor.ss_id)
+                    ss_df = df.filter(df["ss_id"] == sensor.ss_id).select([time_col_name, data_col_name])
                     ss_df.cache()
                     if ss_df.count() > 0:
                         pos_data[str(sensor.ss_id)] = ss_df
@@ -86,20 +86,22 @@ class DatePartitionedRawDataLoader(RawDataLoader):
         ss_id = feature.ss_id
         _period = period(start, end)
 
+        data_col_name = "input_data"
+        time_col_name = "event_time"
         # load data
-        df = self.spark.createDataFrame([], StructType([]))
+        df = self.spark.createDataFrame([], schema=self.__load_schema())  # todo: validated schema from metadata store
         print(f"[{now()}]Sensor {ss_id} data load start")
         for date in _period.range("days"):
             path = self.url_builder.setDate(date).url()
             try:
-                date_df = self.spark.read.format("org.apache.spark.sql.json").load(path)
-                df = df.unionByName(date_df, allowMissingColumns=True)  # todo : compare with broadcasting small df
+                date_df = self.spark.read.format("org.apache.spark.sql.json").load(path).select([time_col_name, data_col_name, "ss_id"])
+                df = df.unionByName(date_df)  # todo : compare with broadcasting small df
                 # logger.debug(f"Data path was loaded: {path}")
                 print(f"[{now()}]Data path was loaded: {path}")
             except Exception as e:
                 # logger.debug(f"Data path does not exists: {path}")
                 print(f"Error: {e}")
-        ss_df = df.filter(F.col("ss_id") == ss_id)
+        ss_df = df.filter(F.col("ss_id") == ss_id).select([time_col_name, data_col_name])
         ss_df.cache()
         print(f"[{now()}]Sensor {ss_id} data load end, length {ss_df.count()}")
         return ss_df
@@ -114,3 +116,19 @@ class DatePartitionedRawDataLoader(RawDataLoader):
 
     def __set_date_in_url(self, date: DateTime):
         self.url_builder.setDate(date)
+
+
+    def __load_schema(self) -> StructType:
+        """
+        temp sensor schema
+        :return:
+        """
+        # todo: validated schema from metadata store
+        data_col_name = "input_data"
+        time_col_name = "event_time"
+        schema = StructType([
+            StructField(time_col_name, LongType()),
+            StructField(data_col_name, FloatType()),
+            StructField("ss_id", IntegerType())
+        ])
+        return schema
