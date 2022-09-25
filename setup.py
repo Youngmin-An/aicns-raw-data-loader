@@ -2,7 +2,7 @@ import os
 from setuptools import setup, find_packages
 
 
-__version__ = "0.0.3"
+__version__ = "0.1.0"
 
 setup(name="aicns_raw_data_loader",
       version=__version__,
